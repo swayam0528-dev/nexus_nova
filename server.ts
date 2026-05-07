@@ -190,18 +190,18 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Serve static files from the built React app
+// Serve static frontend files (built React app)
 const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));
 
-// SPA fallback: serve index.html for all non-API routes
+// SPA fallback - serve index.html for all non-API routes
 app.get('*', (req: Request, res: Response) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+  console.log(`✅ API Server running at http://localhost:${PORT}`);
   console.log(`📝 API Documentation:`);
   console.log(`   POST   /api/orders - Create order`);
   console.log(`   GET    /api/orders - Get all orders`);
