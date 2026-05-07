@@ -36,6 +36,13 @@ interface Order {
 
 const orders: Map<string, Order> = new Map();
 
+// Helper to safely read a header value as string
+function headerToString(value: string | string[] | undefined, fallback = 'system'): string {
+  if (Array.isArray(value)) return value[0] ?? fallback;
+  if (typeof value === 'string') return value;
+  return fallback;
+}
+
 // Generate order ID
 function generateOrderId(): string {
   return `ORD-${String(orders.size + 1).padStart(4, '0')}`;
@@ -65,7 +72,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
       status: 'Received',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      createdBy: req.headers['x-user-email'] || 'system',
+      createdBy: headerToString(req.headers['x-user-email']),
       qualityNotes: [],
     };
 
@@ -154,7 +161,7 @@ app.post('/api/orders/:id/notes', (req: Request, res: Response) => {
       id: `qn-${Date.now()}`,
       note,
       timestamp: new Date().toISOString(),
-      addedBy: req.headers['x-user-email'] || 'system',
+      addedBy: headerToString(req.headers['x-user-email']),
     };
 
     order.qualityNotes.push(newNote);
