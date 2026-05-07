@@ -1,5 +1,10 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
@@ -185,9 +190,18 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Serve static files from the built React app
+const distPath = path.join(__dirname, 'dist');
+app.use(express.static(distPath));
+
+// SPA fallback: serve index.html for all non-API routes
+app.get('*', (req: Request, res: Response) => {
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
 // Start server
 app.listen(PORT, () => {
-  console.log(`✅ API Server running at http://localhost:${PORT}`);
+  console.log(`✅ Server running at http://localhost:${PORT}`);
   console.log(`📝 API Documentation:`);
   console.log(`   POST   /api/orders - Create order`);
   console.log(`   GET    /api/orders - Get all orders`);
@@ -196,4 +210,5 @@ app.listen(PORT, () => {
   console.log(`   POST   /api/orders/:id/notes - Add quality note`);
   console.log(`   DELETE /api/orders/:id - Delete order`);
   console.log(`   GET    /api/health - Health check`);
+  console.log(`🌐 Frontend available at http://localhost:${PORT}`);
 });
