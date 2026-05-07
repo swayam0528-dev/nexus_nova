@@ -3,7 +3,8 @@ import { Send, Bot, User, MessageCircle, X, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChatMessage, Order, QualityNote } from '../types';
 import { parseUserInput } from '../utils/nlpParser';
-import { saveOrder, updateOrder, getOrderById, generateOrderId, getCurrentUser } from '../utils/storage';
+import { apiClient } from '../utils/apiClient';
+import { getCurrentUser } from '../utils/storage';
 
 interface NLPChatProps {
   onOrdersChange: () => void;
@@ -14,7 +15,7 @@ export function NLPChat({ onOrdersChange }: NLPChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      text: "Hi! I'm your order management assistant. You can ask me to:\n\n• Create a new order\n• Update order status\n• Add quality notes\n• View order information\n\nTry saying something like: \"Create an order for 50 Gear Wheels made of Steel, deadline 2026-06-15\"",
+      text: "Hi! I'm your order management assistant. You can ask me to:\n\n• Create a new order\n• Update order status\n• Add quality notes\n• View order information\n\nTry saying something like 'Create an order for 50 Bolts made of Steel'",
       sender: 'assistant',
       timestamp: new Date().toISOString(),
     }
@@ -41,9 +42,9 @@ export function NLPChat({ onOrdersChange }: NLPChatProps) {
     setMessages(prev => [...prev, newMessage]);
   };
 
-  const handleCreateOrder = (entities: any): string => {
+  const handleCreateOrder = async (entities: any): Promise<string> => {
     const currentUser = getCurrentUser();
-    if (!currentUser) return 'Error: User not authenticated';
+    if (!currentUser) return '❌ Error: User not authenticated';
 
     const { partName, material, quantity, deadline } = entities;
 
@@ -51,26 +52,29 @@ export function NLPChat({ onOrdersChange }: NLPChatProps) {
       return 'I need more information to create an order. Please provide: part name, material, quantity, and deadline.\n\nExample: "Create an order for 50 Gear Wheels made of Steel, deadline 2026-06-15"';
     }
 
-    const newOrder: Order = {
-      id: generateOrderId(),
-      partName,
-      material,
-      quantity,
-      deadline,
-      status: 'Received',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      createdBy: currentUser.email,
-      qualityNotes: [],
-    };
+    try {
+      const result = await apiClient.createOrder({
+        partName,
+        material,
+        quantity: parseInt(quantity),
+        deadline,
+      });
 
-    saveOrder(newOrder);
-    onOrdersChange();
+      if (!result.success) {
+        return `❌ ${result.error || 'Failed to create order'}`;
+      }
 
-    return `✅ Order created successfully!\n\nOrder ID: ${newOrder.id}\nPart: ${partName}\nMaterial: ${material}\nQuantity: ${quantity} units\nDeadline: ${deadline}\nStatus: Received\n\nThe order has been added to the dashboard.`;
+      onOrdersChange();
+      const orderId = result.data?.id || result.data?.orderId || 'Generated';
+
+      return `✅ Order created successfully!\n\nOrder ID: ${orderId}\nPart: ${partName}\nMaterial: ${material}\nQuantity: ${quantity} units\nDeadline: ${deadline}\nStatus: Received\n\nThe order has been saved to the system.`;
+    } catch (error) {
+      console.error('Error creating order:', error);
+      return '❌ Error creating order. Please try again.';
+    }
   };
 
-  const handleUpdateStatus = (entities: any): string => {
+  const handleUpdateStatus = async (entities: any): Promise<string> => {
     const { orderId, status } = entities;
 
     if (!orderId) {
@@ -81,20 +85,32 @@ export function NLPChat({ onOrdersChange }: NLPChatProps) {
       return 'Please specify the new status: Received, In Review, or Accepted.\n\nExample: "Mark order ORD-0001 as Accepted"';
     }
 
-    const order = getOrderById(orderId);
-    if (!order) {
-      return `❌ Order ${orderId} not found. Please check the order ID and try again.`;
+    try {
+      // Get current order to show the change
+      const getResult = await apiClient.getOrder(orderId);
+      if (!getResult.success) {
+        return `❌ ${getResult.error || 'Order not found'}`;
+      }
+
+      const oldStatus = getResult.data?.status || 'Unknown';
+
+      const result = await apiClient.updateOrderStatus(orderId, status);
+
+      if (!result.success) {
+        return `❌ ${result.error || 'Failed to update order status'}`;
+      }
+
+      onOrdersChange();
+      return `✅ Status updated successfully!\n\nOrder ${orderId} status changed from "${oldStatus}" to "${status}".`;
+    } catch (error) {
+      console.error('Error updating status:', error);
+      return '❌ Error updating order status. Please try again.';
     }
-
-    const updatedOrder = updateOrder(orderId, { status });
-    onOrdersChange();
-
-    return `✅ Status updated successfully!\n\nOrder ${orderId} status changed from "${order.status}" to "${status}".`;
   };
 
-  const handleAddQualityNote = (entities: any): string => {
+  const handleAddQualityNote = async (entities: any): Promise<string> => {
     const currentUser = getCurrentUser();
-    if (!currentUser) return 'Error: User not authenticated';
+    if (!currentUser) return '❌ Error: User not authenticated';
 
     const { orderId, qualityNote } = entities;
 
@@ -106,23 +122,25 @@ export function NLPChat({ onOrdersChange }: NLPChatProps) {
       return 'Please provide the quality note text.\n\nExample: "Quality note for ORD-0001: Minor surface scratches detected"';
     }
 
-    const order = getOrderById(orderId);
-    if (!order) {
-      return `❌ Order ${orderId} not found. Please check the order ID and try again.`;
+    try {
+      // Verify order exists
+      const getResult = await apiClient.getOrder(orderId);
+      if (!getResult.success) {
+        return `❌ ${getResult.error || 'Order not found'}`;
+      }
+
+      const result = await apiClient.addQualityNote(orderId, qualityNote);
+
+      if (!result.success) {
+        return `❌ ${result.error || 'Failed to add quality note'}`;
+      }
+
+      onOrdersChange();
+      return `✅ Quality note added successfully!\n\nOrder: ${orderId}\nNote: "${qualityNote}"\nAdded by: ${currentUser.name}\n\nThe note has been attached to the order.`;
+    } catch (error) {
+      console.error('Error adding quality note:', error);
+      return '❌ Error adding quality note. Please try again.';
     }
-
-    const newNote: QualityNote = {
-      id: `qn-${Date.now()}`,
-      note: qualityNote,
-      timestamp: new Date().toISOString(),
-      addedBy: currentUser.email,
-    };
-
-    const updatedNotes = [...order.qualityNotes, newNote];
-    updateOrder(orderId, { qualityNotes: updatedNotes });
-    onOrdersChange();
-
-    return `✅ Quality note added successfully!\n\nOrder: ${orderId}\nNote: "${qualityNote}"\nAdded by: ${currentUser.name}\n\nThe note has been attached to the order.`;
   };
 
   const handleQuery = (): string => {
@@ -132,32 +150,38 @@ export function NLPChat({ onOrdersChange }: NLPChatProps) {
   const processUserInput = async (input: string) => {
     setIsProcessing(true);
 
-    // Parse the input
-    const parsed = parseUserInput(input);
+    try {
+      // Parse the input
+      const parsed = parseUserInput(input);
 
-    let response = '';
+      let response = '';
 
-    switch (parsed.action) {
-      case 'create_order':
-        response = handleCreateOrder(parsed.entities);
-        break;
-      case 'update_status':
-        response = handleUpdateStatus(parsed.entities);
-        break;
-      case 'add_quality_note':
-        response = handleAddQualityNote(parsed.entities);
-        break;
-      case 'query':
-        response = handleQuery();
-        break;
-      default:
-        response = "I'm not sure I understood that. I can help you:\n\n• Create orders - \"Create an order for 50 Gear Wheels...\"\n• Update status - \"Mark order ORD-0001 as Accepted\"\n• Add quality notes - \"Quality note for ORD-0001: Passed inspection\"\n• View orders - Check the dashboard";
-    }
+      switch (parsed.action) {
+        case 'create_order':
+          response = await handleCreateOrder(parsed.entities);
+          break;
+        case 'update_status':
+          response = await handleUpdateStatus(parsed.entities);
+          break;
+        case 'add_quality_note':
+          response = await handleAddQualityNote(parsed.entities);
+          break;
+        case 'query':
+          response = handleQuery();
+          break;
+        default:
+          response = "I'm not sure I understood that. I can help you:\n\n• Create orders - \"Create an order for 50 Gear Wheels...\"\n• Update status - \"Mark order ORD-0001 as Accepted\"\n• Add quality notes - \"Add note to ORD-0001: All parts OK\"";
+      }
 
-    setTimeout(() => {
-      addMessage(response, 'assistant');
+      setTimeout(() => {
+        addMessage(response, 'assistant');
+        setIsProcessing(false);
+      }, 500);
+    } catch (error) {
+      console.error('Error processing input:', error);
+      addMessage('❌ An error occurred while processing your request. Please try again.', 'assistant');
       setIsProcessing(false);
-    }, 500);
+    }
   };
 
   const handleSend = () => {
