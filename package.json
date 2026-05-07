@@ -4,12 +4,11 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && tsc server.ts --outDir dist --module esnext --target es2020 --moduleResolution node --skipLibCheck --esModuleInterop --allowSyntheticDefaultImports",
     "dev": "vite",
     "server": "tsx server.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
-    "start": "node dist/server.js",
-    "build:full": "vite build && tsc server.ts --outDir dist --module esnext --target es2020 --moduleResolution node --skipLibCheck --esModuleInterop"
+    "start": "node dist/server.js"
   },
   "dependencies": {
     "react": "^18.3.1",
