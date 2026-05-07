@@ -4,7 +4,7 @@
  */
 
 const API_KEY = 'AIzaSyBVQMeIxOdWuJ8QvzfcM1c2orR_C-QMsUw';
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 interface ApiResponse<T> {
   success: boolean;
